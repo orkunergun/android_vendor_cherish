@@ -71,9 +71,9 @@ PRODUCT_PROPERTY_OVERRIDES += \
     persist.sys.wfd.virtual=0
 
 # Blurs
-PRODUCT_SYSTEM_EXT_PROPERTIES += \
-    ro.sf.blurs_are_expensive=1 \
-    ro.surface_flinger.supports_background_blur=1
+#PRODUCT_SYSTEM_EXT_PROPERTIES += \
+#   ro.sf.blurs_are_expensive=1 \
+#    ro.surface_flinger.supports_background_blur=1
 
 # # Disable blur on app-launch
 # PRODUCT_SYSTEM_EXT_PROPERTIES += \
