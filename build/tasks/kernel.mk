@@ -32,6 +32,10 @@
 #
 #   TARGET_KERNEL_CLANG_COMPILE        = Compile kernel with clang, defaults to true
 #
+#   TARGET_KERNEL_CLANG_VERSION        = Clang prebuilts version, optional, defaults to clang-stable
+#
+#   TARGET_KERNEL_CLANG_PATH           = Clang prebuilts path, optional
+#
 #   KERNEL_SUPPORTS_LLVM_TOOLS         = If set, switches ar, nm, objcopy, objdump to llvm tools instead of using GNU Binutils, optional
 #
 #   BOARD_KERNEL_IMAGE_NAME            = Built image name
@@ -220,9 +224,16 @@ ifeq ($(or $(FULL_RECOVERY_KERNEL_BUILD), $(FULL_KERNEL_BUILD)),true)
 # Add host bin out dir to path
 PATH_OVERRIDE := PATH=$(KERNEL_BUILD_OUT_PREFIX)$(HOST_OUT_EXECUTABLES):$$PATH
 ifneq ($(TARGET_KERNEL_CLANG_COMPILE),false)
+    ifneq ($(TARGET_KERNEL_CLANG_VERSION),)
+        KERNEL_CLANG_VERSION := clang-$(TARGET_KERNEL_CLANG_VERSION)
+    else
+        # Use the default version of clang if TARGET_KERNEL_CLANG_VERSION hasn't been set by the device config
+        KERNEL_CLANG_VERSION := $(LLVM_PREBUILTS_VERSION)
+    endif
+
     # As 
     ifeq ($(KERNEL_SUPPORTS_LLVM_TOOLS),true)
-        KERNEL_LD ?= LD=ld.lld
+        KERNEL_LD := LD=ld.lld
         KERNEL_AR := AR=llvm-ar
         KERNEL_OBJCOPY := OBJCOPY=llvm-objcopy
         KERNEL_OBJDUMP := OBJDUMP=llvm-objdump
@@ -236,7 +247,8 @@ ifneq ($(TARGET_KERNEL_CLANG_COMPILE),false)
         KERNEL_NM :=
         KERNEL_STRIP :=
     endif
-    ifneq ($(KERNEL_NO_GCC), true)
+    TARGET_KERNEL_CLANG_PATH ?= $(BUILD_TOP)/prebuilts/clang/host/$(HOST_PREBUILT_TAG)/$(KERNEL_CLANG_VERSION)
+    ifeq (,$(filter 5.10, $(TARGET_KERNEL_VERSION)))
         ifeq ($(KERNEL_ARCH),arm64)
             KERNEL_CLANG_TRIPLE ?= CLANG_TRIPLE=aarch64-linux-gnu-
         else ifeq ($(KERNEL_ARCH),arm)
@@ -248,12 +260,19 @@ ifneq ($(TARGET_KERNEL_CLANG_COMPILE),false)
     endif
     PATH_OVERRIDE += PATH=$(TARGET_KERNEL_CLANG_PATH)/bin:$$PATH
     ifeq ($(KERNEL_CC),)
-        KERNEL_CC := CC="$(CCACHE_BIN) clang"
+        CLANG_EXTRA_FLAGS := --cuda-path=/dev/null
+        ifeq ($(shell $(TARGET_KERNEL_CLANG_PATH)/bin/clang -v --hip-path=/dev/null >/dev/null 2>&1; echo $$?),0)
+            CLANG_EXTRA_FLAGS += --hip-path=/dev/null
+        endif
+        KERNEL_CC := CC="$(CCACHE_BIN) clang $(CLANG_EXTRA_FLAGS)"
     endif
 endif
 
-ifneq ($(KERNEL_NO_GCC), true)
-    PATH_OVERRIDE += PATH=$(KERNEL_TOOLCHAIN_PATH_gcc):$$PATH
+ifeq ($(TARGET_KERNEL_LLVM_BINUTILS), false)
+    # 5.10+ can fully compile without gcc
+    ifeq (,$(filter 5.10, $(TARGET_KERNEL_VERSION)))
+        PATH_OVERRIDE += PATH=$(KERNEL_TOOLCHAIN_PATH_gcc):$$PATH
+    endif
 endif
 
 # System tools are no longer allowed on 10+
